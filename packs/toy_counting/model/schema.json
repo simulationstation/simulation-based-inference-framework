@@ -1,0 +1,9 @@
+{
+  "pois": [
+    {"name": "mu", "index": 0, "transform": "none"}
+  ],
+  "nuisances": [
+    {"name": "bkg_norm", "index": 0, "transform": "none"},
+    {"name": "lumi", "index": 1, "transform": "none"}
+  ]
+}

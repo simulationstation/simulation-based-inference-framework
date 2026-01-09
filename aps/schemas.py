@@ -168,10 +168,15 @@ LIKELIHOOD_SCHEMA: Dict[str, Any] = {
                     "model": {
                         "type": "object",
                         "properties": {
+                            "type": {"type": "string"},
                             "signal": {
                                 "type": "object",
                                 "properties": {
                                     "file": {"type": "string"},
+                                    "values": {
+                                        "type": "array",
+                                        "items": {"type": "number"}
+                                    },
                                     "parametric": {"type": "boolean"},
                                     "formula": {"type": "string"}
                                 }
@@ -180,6 +185,10 @@ LIKELIHOOD_SCHEMA: Dict[str, Any] = {
                                 "type": "object",
                                 "properties": {
                                     "file": {"type": "string"},
+                                    "values": {
+                                        "type": "array",
+                                        "items": {"type": "number"}
+                                    },
                                     "parametric": {"type": "boolean"},
                                     "formula": {"type": "string"}
                                 }
@@ -203,7 +212,9 @@ LIKELIHOOD_SCHEMA: Dict[str, Any] = {
                                 "type": {"type": "string", "enum": ["shape", "norm", "both"]},
                                 "up": {"type": "string"},
                                 "down": {"type": "string"},
-                                "constraint": {"type": "string"}
+                                "constraint": {"type": "string"},
+                                "sigma": {"type": "number"},
+                                "target": {"type": "string", "enum": ["signal", "background", "both"]}
                             }
                         }
                     }

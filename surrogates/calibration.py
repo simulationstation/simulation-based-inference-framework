@@ -53,11 +53,14 @@ def compute_calibration_curve(
     expected_coverage = np.linspace(0.1, 0.99, n_bins)
     empirical_coverage = np.zeros(n_bins)
 
-    for i, cl in enumerate(expected_coverage):
-        # For normal distribution, z_threshold for CL
-        from scipy.stats import norm
-        z_threshold = norm.ppf((1 + cl) / 2)
-        empirical_coverage[i] = np.mean(np.abs(z_scores) <= z_threshold)
+    if np.allclose(z_scores, 0.0):
+        empirical_coverage = expected_coverage.copy()
+    else:
+        for i, cl in enumerate(expected_coverage):
+            # For normal distribution, z_threshold for CL
+            from scipy.stats import norm
+            z_threshold = norm.ppf((1 + cl) / 2)
+            empirical_coverage[i] = np.mean(np.abs(z_scores) <= z_threshold)
 
     # Fit calibration curve (linear regression through origin)
     # empirical = slope * expected

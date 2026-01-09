@@ -1,0 +1,44 @@
+name: toy_counting_v1
+version: 0.1.0
+description: Toy single-channel counting experiment with signal and background.
+collaboration: public-toy
+license: CC0-1.0
+contact: aps-dev@example.com
+provenance:
+  sources:
+    - type: url
+      id: https://example.com/toy
+      description: Synthetic toy dataset generated for APS demos.
+  interpretation_limits:
+    - "Synthetic toy data; not representative of any real experiment."
+parameters:
+  pois:
+    - name: mu
+      description: Signal strength multiplier.
+      range: [0.0, 5.0]
+      nominal: 1.0
+      unit: ""
+  nuisances:
+    - name: bkg_norm
+      description: Background normalization.
+      constraint: normal
+      nominal: 0.0
+      sigma: 1.0
+      range: [-5.0, 5.0]
+    - name: lumi
+      description: Luminosity scaling for signal.
+      constraint: lognormal
+      nominal: 0.0
+      sigma: 1.0
+      range: [-5.0, 5.0]
+statistical_contract:
+  likelihood_type: poisson
+  systematics_treatment: multiplicative norm systematics applied to signal/background.
+  asymptotic_valid: true
+  toy_mc_recommended: true
+reproduction_targets:
+  - name: mle_mu
+    source: demo
+    value: 1.17
+    tolerance_rel: 0.2
+references: []

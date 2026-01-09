@@ -216,7 +216,7 @@ class GPSurrogate(SurrogateModel):
         k_star = self._kernel(x, self._X_train)
 
         # Posterior mean
-        mean = float(k_star @ self._alpha)
+        mean = (k_star @ self._alpha).squeeze().item()
 
         # Posterior variance
         k_ss = self._kernel(x, x)[0, 0]
@@ -547,7 +547,7 @@ class ParametricSurrogate(SurrogateModel):
         x = np.concatenate([theta, nu]).reshape(1, -1)
         Phi = self._polynomial_features(x)
 
-        mean = float(Phi @ self._coefficients)
+        mean = (Phi @ self._coefficients).squeeze().item()
         std = self._residual_std
 
         return mean, std
