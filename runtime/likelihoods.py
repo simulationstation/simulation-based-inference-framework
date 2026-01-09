@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Tuple, Callable, Any
 from dataclasses import dataclass, field
 import numpy as np
 from scipy import special
+from pathlib import Path
 
 # Fit health thresholds (from reference implementation)
 CHI2_DOF_LOW = 0.5    # Below = underconstrained
@@ -566,30 +567,68 @@ def create_model(pack) -> LikelihoodModel:
 
 def _create_poisson_model(pack) -> PoissonLikelihood:
     """Create Poisson model from pack."""
-    # Get the first channel's data
     if not pack.channels:
         raise ValueError("Pack has no channel data")
 
-    channel_name = list(pack.channels.keys())[0]
-    channel = pack.channels[channel_name]
+    nuisance_names = pack.get_nuisance_names()
+    poi_names = pack.get_poi_names()
+    nuisance_types = [p.constraint for p in pack.nuisances]
+    nuisance_sigmas = np.array([p.sigma for p in pack.nuisances]) if pack.n_nuisances > 0 else np.array([])
 
-    # Create a simple model function
-    # This would be extended based on pack's model specification
-    def model_func(theta, nu):
-        # Simple signal + background model
-        # theta[0] = signal strength
-        # Background fixed at observed for now
-        mu = theta[0] if len(theta) > 0 else 1.0
-        return channel.observed * mu
+    poisson_channels = []
 
-    nuisance_sigmas = np.ones(pack.n_nuisances)
+    for ch_spec in pack.likelihood_spec.get("channels", []):
+        ch_name = ch_spec["name"]
+        if ch_name not in pack.channels:
+            continue
+        channel = pack.channels[ch_name]
 
-    return PoissonLikelihood(
-        observed=channel.observed,
-        model_func=model_func,
-        pack=pack,
-        nuisance_sigmas=nuisance_sigmas
-    )
+        signal, background = _extract_yields(pack, ch_spec, channel)
+        effects = _extract_systematics(ch_spec)
+
+        def model_func(theta, nu, signal=signal, background=background, effects=effects):
+            mu = theta[0] if len(theta) > 0 else 1.0
+            signal_scale = 1.0
+            background_scale = 1.0
+
+            for i, name in enumerate(nuisance_names):
+                if name not in effects:
+                    continue
+                effect = effects[name]
+                sigma = effect["sigma"]
+                constraint = effect["constraint"]
+                target = effect["target"]
+                if constraint == "lognormal":
+                    factor = np.exp(nu[i] * sigma)
+                else:
+                    factor = 1.0 + nu[i] * sigma
+
+                if target == "signal":
+                    signal_scale *= factor
+                elif target == "background":
+                    background_scale *= factor
+                elif target == "both":
+                    signal_scale *= factor
+                    background_scale *= factor
+
+            return mu * signal * signal_scale + background * background_scale
+
+        model = PoissonLikelihood(
+            observed=channel.observed,
+            model_func=model_func,
+            pack=pack,
+            nuisance_sigmas=nuisance_sigmas,
+            nuisance_types=nuisance_types
+        )
+        _apply_pack_metadata(model, pack)
+        poisson_channels.append(model)
+
+    if len(poisson_channels) == 1:
+        return poisson_channels[0]
+
+    combined = HybridLikelihood(poisson_channels=poisson_channels, gaussian_channels=[], pack=pack)
+    _apply_pack_metadata(combined, pack)
+    return combined
 
 
 def _create_gaussian_model(pack) -> GaussianLikelihood:
@@ -606,13 +645,15 @@ def _create_gaussian_model(pack) -> GaussianLikelihood:
 
     nuisance_sigmas = np.ones(pack.n_nuisances)
 
-    return GaussianLikelihood(
+    model = GaussianLikelihood(
         observed=channel.observed,
         errors=channel.errors,
         model_func=model_func,
         pack=pack,
         nuisance_sigmas=nuisance_sigmas
     )
+    _apply_pack_metadata(model, pack)
+    return model
 
 
 def _create_hybrid_model(pack) -> HybridLikelihood:
@@ -645,8 +686,73 @@ def _create_hybrid_model(pack) -> HybridLikelihood:
                     pack=pack
                 ))
 
-    return HybridLikelihood(
+    model = HybridLikelihood(
         poisson_channels=poisson_channels,
         gaussian_channels=gaussian_channels,
         pack=pack
     )
+    _apply_pack_metadata(model, pack)
+    return model
+
+
+def _apply_pack_metadata(model: LikelihoodModel, pack: Any) -> None:
+    """Attach parameter metadata from pack to a model instance."""
+    model._poi_names = pack.get_poi_names()
+    model._nuisance_names = pack.get_nuisance_names()
+    model._poi_bounds = [tuple(p.range) for p in pack.pois]
+    model._nuisance_bounds = [tuple(p.range) for p in pack.nuisances]
+
+
+def _extract_systematics(channel_spec: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Extract systematic effects from channel specification."""
+    effects: Dict[str, Dict[str, Any]] = {}
+    for syst in channel_spec.get("systematics", []):
+        name = syst.get("name")
+        if not name:
+            continue
+        effects[name] = {
+            "sigma": float(syst.get("sigma", 0.0)),
+            "constraint": syst.get("constraint", "normal"),
+            "target": syst.get("target", "both")
+        }
+    return effects
+
+
+def _extract_yields(pack: Any, channel_spec: Dict[str, Any], channel: Any) -> Tuple[np.ndarray, np.ndarray]:
+    """Extract signal/background yields for a channel."""
+    model_spec = channel_spec.get("model", {})
+    signal_spec = model_spec.get("signal", {})
+    background_spec = model_spec.get("background", {})
+
+    signal = _load_yields(pack.path, signal_spec) if signal_spec else None
+    background = _load_yields(pack.path, background_spec) if background_spec else None
+
+    if signal is None and background is None:
+        signal = channel.observed
+        background = np.zeros_like(channel.observed)
+    elif signal is None:
+        signal = np.zeros_like(background)
+    elif background is None:
+        background = np.zeros_like(signal)
+
+    if len(signal) != len(channel.observed) or len(background) != len(channel.observed):
+        raise ValueError(f"Yield length mismatch for channel {channel.name}")
+
+    return signal, background
+
+
+def _load_yields(pack_path: Path, spec: Dict[str, Any]) -> Optional[np.ndarray]:
+    """Load yield arrays from a model spec."""
+    if not spec:
+        return None
+    if "values" in spec:
+        return np.array(spec["values"], dtype=float)
+    if "file" in spec:
+        file_path = pack_path / "model" / spec["file"]
+        if not file_path.exists():
+            raise FileNotFoundError(f"Missing model file: {file_path}")
+        data = np.genfromtxt(file_path, delimiter=",", skip_header=1, dtype=float)
+        if data.ndim == 1:
+            return np.array([data[1]], dtype=float)
+        return data[:, 1]
+    return None

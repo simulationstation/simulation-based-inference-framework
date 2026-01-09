@@ -1,0 +1,43 @@
+{
+  "type": "poisson",
+  "channels": [
+    {
+      "name": "counting",
+      "type": "poisson",
+      "data": {
+        "file": "observed.csv",
+        "format": "csv",
+        "bins": 5,
+        "observable": "bin"
+      },
+      "model": {
+        "type": "counting",
+        "signal": {
+          "file": "signal.csv"
+        },
+        "background": {
+          "file": "background.csv"
+        }
+      },
+      "systematics": [
+        {
+          "name": "bkg_norm",
+          "type": "norm",
+          "constraint": "normal",
+          "sigma": 0.1,
+          "target": "background"
+        },
+        {
+          "name": "lumi",
+          "type": "norm",
+          "constraint": "lognormal",
+          "sigma": 0.02,
+          "target": "signal"
+        }
+      ]
+    }
+  ],
+  "correlations": {
+    "type": "independent"
+  }
+}
