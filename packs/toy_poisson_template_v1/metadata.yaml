@@ -1,0 +1,43 @@
+name: toy_poisson_template_v1
+version: "1.0.0"
+description: "Toy Poisson template likelihood with Gaussian-constrained nuisances."
+collaboration: "toy"
+provenance:
+  sources:
+    - type: url
+      id: "synthetic://toy_poisson_template_v1"
+      description: "Fully synthetic toy data for APS vertical slice."
+  interpretation_limits:
+    - "Synthetic counts; no external physics claim."
+parameters:
+  pois:
+    - name: mu
+      description: "Signal strength multiplier"
+      range: [0.0, 2.0]
+      nominal: 1.0
+  nuisances:
+    - name: lumi
+      description: "Global normalization (signal+background)"
+      constraint: normal
+      nominal: 0.0
+      sigma: 1.0
+      range: [-5.0, 5.0]
+    - name: bkg_norm
+      description: "Background normalization"
+      constraint: normal
+      nominal: 0.0
+      sigma: 1.0
+      range: [-5.0, 5.0]
+    - name: bkg_shape
+      description: "Background shape morphing"
+      constraint: normal
+      nominal: 0.0
+      sigma: 1.0
+      range: [-5.0, 5.0]
+statistical_contract:
+  likelihood_type: poisson
+  systematics_treatment: "Gaussian nuisances with linearized effects"
+  asymptotic_valid: true
+  toy_mc_recommended: true
+license: "MIT"
+contact: "aps-dev@example.com"

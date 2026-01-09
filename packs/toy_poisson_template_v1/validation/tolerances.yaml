@@ -1,0 +1,7 @@
+default: 1.0e-4
+mu_hat: 5.0e-3
+nll: 1.0e-3
+nu_hat: 1.0e-4
+scan.mu: 1.0e-8
+scan.qmu: 1.0e-3
+scan.delta_nll: 1.0e-3

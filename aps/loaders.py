@@ -2,23 +2,16 @@
 Pack loading and validation utilities for Analysis Pack Standard.
 """
 
-import os
-import json
 import hashlib
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
-import yaml
 import numpy as np
+import yaml
 
-from .schemas import (
-    METADATA_SCHEMA,
-    LIKELIHOOD_SCHEMA,
-    CONSTRAINTS_SCHEMA,
-    PARAMETER_SCHEMA,
-    validate_against_schema
-)
+from .schemas import CONSTRAINTS_SCHEMA, LIKELIHOOD_SCHEMA, METADATA_SCHEMA, validate_against_schema
 
 
 @dataclass
@@ -26,7 +19,7 @@ class ParameterSpec:
     """Specification for a single parameter."""
     name: str
     description: str = ""
-    range: Tuple[float, float] = (-np.inf, np.inf)
+    range: tuple[float, float] = (-np.inf, np.inf)
     nominal: float = 0.0
     unit: str = ""
     constraint: str = "none"  # normal, lognormal, poisson, uniform, fixed
@@ -41,9 +34,9 @@ class ChannelData:
     observable: np.ndarray  # e.g., mass bins
     observed: np.ndarray    # observed counts/cross-sections
     errors: np.ndarray      # statistical errors
-    errors_up: Optional[np.ndarray] = None   # asymmetric upper errors
-    errors_down: Optional[np.ndarray] = None # asymmetric lower errors
-    systematic_errors: Optional[np.ndarray] = None
+    errors_up: np.ndarray | None = None   # asymmetric upper errors
+    errors_down: np.ndarray | None = None # asymmetric lower errors
+    systematic_errors: np.ndarray | None = None
 
     @property
     def nbins(self) -> int:
@@ -62,19 +55,19 @@ class AnalysisPack:
     This is the main object for interacting with an analysis.
     """
     path: Path
-    metadata: Dict[str, Any]
-    likelihood_spec: Dict[str, Any]
-    constraints: Optional[Dict[str, Any]] = None
-    parameter_schema: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any]
+    likelihood_spec: dict[str, Any]
+    constraints: dict[str, Any] | None = None
+    parameter_schema: dict[str, Any] | None = None
 
     # Loaded data
-    channels: Dict[str, ChannelData] = field(default_factory=dict)
-    pois: List[ParameterSpec] = field(default_factory=list)
-    nuisances: List[ParameterSpec] = field(default_factory=list)
+    channels: dict[str, ChannelData] = field(default_factory=dict)
+    pois: list[ParameterSpec] = field(default_factory=list)
+    nuisances: list[ParameterSpec] = field(default_factory=list)
 
     # Validation state
     validated: bool = False
-    validation_errors: List[str] = field(default_factory=list)
+    validation_errors: list[str] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -100,10 +93,10 @@ class AnalysisPack:
     def n_params(self) -> int:
         return self.n_pois + self.n_nuisances
 
-    def get_poi_names(self) -> List[str]:
+    def get_poi_names(self) -> list[str]:
         return [p.name for p in self.pois]
 
-    def get_nuisance_names(self) -> List[str]:
+    def get_nuisance_names(self) -> list[str]:
         return [p.name for p in self.nuisances]
 
     def model(self):
@@ -144,7 +137,7 @@ def load(pack_path: str, validate: bool = True) -> AnalysisPack:
     if not metadata_path.exists():
         raise FileNotFoundError(f"Missing required file: metadata.yaml in {pack_path}")
 
-    with open(metadata_path, 'r') as f:
+    with open(metadata_path) as f:
         metadata = yaml.safe_load(f)
 
     # Load model/likelihood.json (required)
@@ -152,20 +145,20 @@ def load(pack_path: str, validate: bool = True) -> AnalysisPack:
     if not likelihood_path.exists():
         raise FileNotFoundError(f"Missing required file: model/likelihood.json in {pack_path}")
 
-    with open(likelihood_path, 'r') as f:
+    with open(likelihood_path) as f:
         likelihood_spec = json.load(f)
 
     # Load optional files
     constraints = None
     constraints_path = path / "model" / "constraints.json"
     if constraints_path.exists():
-        with open(constraints_path, 'r') as f:
+        with open(constraints_path) as f:
             constraints = json.load(f)
 
     parameter_schema = None
     schema_path = path / "model" / "schema.json"
     if schema_path.exists():
-        with open(schema_path, 'r') as f:
+        with open(schema_path) as f:
             parameter_schema = json.load(f)
 
     # Create pack object
@@ -190,12 +183,12 @@ def load(pack_path: str, validate: bool = True) -> AnalysisPack:
         pack.validated = is_valid
         pack.validation_errors = errors
         if not is_valid:
-            raise ValueError(f"Pack validation failed:\n" + "\n".join(errors))
+            raise ValueError("Pack validation failed:\n" + "\n".join(errors))
 
     return pack
 
 
-def _parse_parameters(param_list: List[Dict]) -> List[ParameterSpec]:
+def _parse_parameters(param_list: list[dict]) -> list[ParameterSpec]:
     """Parse parameter specifications from metadata."""
     params = []
     for p in param_list:
@@ -213,7 +206,7 @@ def _parse_parameters(param_list: List[Dict]) -> List[ParameterSpec]:
     return params
 
 
-def _load_channels(pack_path: Path, likelihood_spec: Dict) -> Dict[str, ChannelData]:
+def _load_channels(pack_path: Path, likelihood_spec: dict) -> dict[str, ChannelData]:
     """Load data for all channels specified in likelihood."""
     channels = {}
 
@@ -231,7 +224,7 @@ def _load_channels(pack_path: Path, likelihood_spec: Dict) -> Dict[str, ChannelD
     return channels
 
 
-def _load_channel_data(name: str, path: Path, spec: Dict) -> ChannelData:
+def _load_channel_data(name: str, path: Path, spec: dict) -> ChannelData:
     """Load data for a single channel from CSV."""
     data_format = spec.get("format", "csv")
 
@@ -243,10 +236,10 @@ def _load_channel_data(name: str, path: Path, spec: Dict) -> ChannelData:
         raise ValueError(f"Unsupported data format: {data_format}")
 
 
-def _load_csv_channel(name: str, path: Path, spec: Dict) -> ChannelData:
+def _load_csv_channel(name: str, path: Path, spec: dict) -> ChannelData:
     """Load channel data from CSV file."""
     # Read CSV header to determine format
-    with open(path, 'r') as f:
+    with open(path) as f:
         header = f.readline().strip().split(',')
 
     data = np.genfromtxt(path, delimiter=',', skip_header=1, dtype=float)
@@ -318,7 +311,7 @@ def _load_csv_channel(name: str, path: Path, spec: Dict) -> ChannelData:
     )
 
 
-def _load_parquet_channel(name: str, path: Path, spec: Dict) -> ChannelData:
+def _load_parquet_channel(name: str, path: Path, spec: dict) -> ChannelData:
     """Load channel data from Parquet file."""
     try:
         import pandas as pd
@@ -343,7 +336,7 @@ def _load_parquet_channel(name: str, path: Path, spec: Dict) -> ChannelData:
         raise ImportError("pandas and pyarrow required for parquet support")
 
 
-def validate_pack(pack: AnalysisPack) -> Tuple[bool, List[str]]:
+def validate_pack(pack: AnalysisPack) -> tuple[bool, list[str]]:
     """
     Validate an analysis pack for completeness and correctness.
 
@@ -393,7 +386,116 @@ def validate_pack(pack: AnalysisPack) -> Tuple[bool, List[str]]:
         if not valid:
             errors.extend([f"constraints.json: {e}" for e in schema_errors])
 
+    # 8. Validate model specs and templates
+    templates = _load_template_map(pack.path)
+    for ch_spec in pack.likelihood_spec.get("channels", []):
+        ch_name = ch_spec.get("name", "unknown")
+        channel = pack.channels.get(ch_name)
+        if channel is None:
+            continue
+
+        model_spec = ch_spec.get("model", {})
+        allowed_model_keys = {"type", "signal", "background", "efficiency"}
+        extra_model_keys = set(model_spec.keys()) - allowed_model_keys
+        if extra_model_keys:
+            errors.append(f"Channel {ch_name} model has unknown keys: {sorted(extra_model_keys)}")
+
+        for component in ("signal", "background"):
+            spec = model_spec.get(component, {})
+            if spec.get("parametric"):
+                errors.append(f"Channel {ch_name} {component} uses parametric formulas (unsupported)")
+
+            if "formula" in spec:
+                errors.append(f"Channel {ch_name} {component} uses formula strings (unsupported)")
+
+            try:
+                yields = _load_yields_for_validation(pack.path, spec, templates)
+            except (FileNotFoundError, ValueError) as exc:
+                errors.append(f"Channel {ch_name} {component}: {exc}")
+                continue
+
+            if yields is not None and len(yields) != channel.nbins:
+                errors.append(
+                    f"Channel {ch_name} {component} length {len(yields)} != data bins {channel.nbins}"
+                )
+
+        for syst in ch_spec.get("systematics", []):
+            name = syst.get("name")
+            if name and name not in nuisance_names:
+                errors.append(f"Channel {ch_name} systematic '{name}' not defined in metadata nuisances")
+
+            syst_type = syst.get("type", "norm")
+            if syst_type not in {"norm", "shape", "both"}:
+                errors.append(f"Channel {ch_name} systematic '{name}' has unknown type '{syst_type}'")
+
+            target = syst.get("target", "both")
+            if target not in {"signal", "background", "both"}:
+                errors.append(f"Channel {ch_name} systematic '{name}' has unknown target '{target}'")
+
+            if syst_type == "shape":
+                up_name = syst.get("up")
+                down_name = syst.get("down")
+                if not up_name or not down_name:
+                    errors.append(f"Channel {ch_name} shape systematic '{name}' missing up/down templates")
+                else:
+                    try:
+                        up = _resolve_template(pack.path, up_name, templates)
+                        down = _resolve_template(pack.path, down_name, templates)
+                    except ValueError as exc:
+                        errors.append(f"Channel {ch_name} shape systematic '{name}': {exc}")
+                        continue
+                    if len(up) != channel.nbins or len(down) != channel.nbins:
+                        errors.append(
+                            f"Channel {ch_name} shape systematic '{name}' template length mismatch"
+                        )
+
+    nuisances_file = pack.likelihood_spec.get("nuisances_file")
+    if nuisances_file:
+        nuis_path = pack.path / "model" / nuisances_file
+        if not nuis_path.exists():
+            errors.append(f"Missing nuisances file: model/{nuisances_file}")
+
     return len(errors) == 0, errors
+
+
+def _load_template_map(pack_path: Path) -> dict[str, np.ndarray]:
+    templates_path = pack_path / "model" / "templates.json"
+    if not templates_path.exists():
+        return {}
+    with open(templates_path) as f:
+        payload = json.load(f)
+    template_map = {}
+    for name, values in payload.get("templates", {}).items():
+        template_map[name] = np.array(values, dtype=float)
+    return template_map
+
+
+def _resolve_template(pack_path: Path, name: str, templates: dict[str, np.ndarray]) -> np.ndarray:
+    if name in templates:
+        return templates[name]
+    raise ValueError(f"Template '{name}' not found in model/templates.json")
+
+
+def _load_yields_for_validation(
+    pack_path: Path,
+    spec: dict[str, Any],
+    templates: dict[str, np.ndarray]
+) -> np.ndarray | None:
+    if not spec:
+        return None
+    if "values" in spec:
+        return np.array(spec["values"], dtype=float)
+    if "template" in spec:
+        return _resolve_template(pack_path, spec["template"], templates)
+    if "file" in spec:
+        file_path = pack_path / "model" / spec["file"]
+        if not file_path.exists():
+            raise FileNotFoundError(f"Missing model file: {file_path}")
+        data = np.genfromtxt(file_path, delimiter=",", skip_header=1, dtype=float)
+        if data.ndim == 1:
+            return np.array([data[1]], dtype=float)
+        return data[:, 1]
+    return None
 
 
 def compute_file_hash(file_path: Path, algorithm: str = "sha256") -> str:
@@ -405,7 +507,7 @@ def compute_file_hash(file_path: Path, algorithm: str = "sha256") -> str:
     return h.hexdigest()
 
 
-def verify_pack_integrity(pack: AnalysisPack) -> Tuple[bool, List[str]]:
+def verify_pack_integrity(pack: AnalysisPack) -> tuple[bool, list[str]]:
     """
     Verify integrity of pack files against recorded hashes.
 

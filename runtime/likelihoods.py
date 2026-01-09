@@ -10,12 +10,14 @@ Supports Poisson, Gaussian, and Hybrid likelihood models with:
 Patterns adapted from publication-grade rank-1 bottleneck tests.
 """
 
+import json
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Tuple, Callable, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import numpy as np
 from scipy import special
-from pathlib import Path
 
 # Fit health thresholds (from reference implementation)
 CHI2_DOF_LOW = 0.5    # Below = underconstrained
@@ -571,10 +573,10 @@ def _create_poisson_model(pack) -> PoissonLikelihood:
         raise ValueError("Pack has no channel data")
 
     nuisance_names = pack.get_nuisance_names()
-    poi_names = pack.get_poi_names()
     nuisance_types = [p.constraint for p in pack.nuisances]
     nuisance_sigmas = np.array([p.sigma for p in pack.nuisances]) if pack.n_nuisances > 0 else np.array([])
 
+    templates = _load_templates(pack.path)
     poisson_channels = []
 
     for ch_spec in pack.likelihood_spec.get("channels", []):
@@ -583,13 +585,15 @@ def _create_poisson_model(pack) -> PoissonLikelihood:
             continue
         channel = pack.channels[ch_name]
 
-        signal, background = _extract_yields(pack, ch_spec, channel)
-        effects = _extract_systematics(ch_spec)
+        signal, background = _extract_yields(pack, ch_spec, channel, templates)
+        effects = _extract_systematics(ch_spec, templates)
 
         def model_func(theta, nu, signal=signal, background=background, effects=effects):
             mu = theta[0] if len(theta) > 0 else 1.0
             signal_scale = 1.0
             background_scale = 1.0
+            signal_shape = signal.copy()
+            background_shape = background.copy()
 
             for i, name in enumerate(nuisance_names):
                 if name not in effects:
@@ -598,6 +602,16 @@ def _create_poisson_model(pack) -> PoissonLikelihood:
                 sigma = effect["sigma"]
                 constraint = effect["constraint"]
                 target = effect["target"]
+
+                if effect["type"] == "shape":
+                    alpha = nu[i] * sigma
+                    delta = effect["delta"]
+                    if target in ("signal", "both"):
+                        signal_shape = signal_shape + alpha * delta
+                    if target in ("background", "both"):
+                        background_shape = background_shape + alpha * delta
+                    continue
+
                 if constraint == "lognormal":
                     factor = np.exp(nu[i] * sigma)
                 else:
@@ -611,7 +625,10 @@ def _create_poisson_model(pack) -> PoissonLikelihood:
                     signal_scale *= factor
                     background_scale *= factor
 
-            return mu * signal * signal_scale + background * background_scale
+            signal_scaled = np.maximum(signal_shape * signal_scale, 0.0)
+            background_scaled = np.maximum(background_shape * background_scale, 0.0)
+            expected = mu * signal_scaled + background_scaled
+            return np.maximum(expected, 0.0)
 
         model = PoissonLikelihood(
             observed=channel.observed,
@@ -703,29 +720,49 @@ def _apply_pack_metadata(model: LikelihoodModel, pack: Any) -> None:
     model._nuisance_bounds = [tuple(p.range) for p in pack.nuisances]
 
 
-def _extract_systematics(channel_spec: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+def _extract_systematics(
+    channel_spec: Dict[str, Any],
+    templates: Optional[Dict[str, np.ndarray]] = None
+) -> Dict[str, Dict[str, Any]]:
     """Extract systematic effects from channel specification."""
     effects: Dict[str, Dict[str, Any]] = {}
     for syst in channel_spec.get("systematics", []):
         name = syst.get("name")
         if not name:
             continue
+        effect_type = syst.get("type", "norm")
+        delta = None
+        if effect_type == "shape":
+            up_name = syst.get("up")
+            down_name = syst.get("down")
+            if not up_name or not down_name:
+                raise ValueError(f"Shape systematic '{name}' missing up/down templates")
+            up = _resolve_template(up_name, templates)
+            down = _resolve_template(down_name, templates)
+            delta = 0.5 * (up - down)
         effects[name] = {
+            "type": effect_type,
             "sigma": float(syst.get("sigma", 0.0)),
             "constraint": syst.get("constraint", "normal"),
-            "target": syst.get("target", "both")
+            "target": syst.get("target", "both"),
+            "delta": delta
         }
     return effects
 
 
-def _extract_yields(pack: Any, channel_spec: Dict[str, Any], channel: Any) -> Tuple[np.ndarray, np.ndarray]:
+def _extract_yields(
+    pack: Any,
+    channel_spec: Dict[str, Any],
+    channel: Any,
+    templates: Optional[Dict[str, np.ndarray]] = None
+) -> Tuple[np.ndarray, np.ndarray]:
     """Extract signal/background yields for a channel."""
     model_spec = channel_spec.get("model", {})
     signal_spec = model_spec.get("signal", {})
     background_spec = model_spec.get("background", {})
 
-    signal = _load_yields(pack.path, signal_spec) if signal_spec else None
-    background = _load_yields(pack.path, background_spec) if background_spec else None
+    signal = _load_yields(pack.path, signal_spec, templates) if signal_spec else None
+    background = _load_yields(pack.path, background_spec, templates) if background_spec else None
 
     if signal is None and background is None:
         signal = channel.observed
@@ -741,12 +778,33 @@ def _extract_yields(pack: Any, channel_spec: Dict[str, Any], channel: Any) -> Tu
     return signal, background
 
 
-def _load_yields(pack_path: Path, spec: Dict[str, Any]) -> Optional[np.ndarray]:
+def _load_templates(pack_path: Path) -> Dict[str, np.ndarray]:
+    templates_path = pack_path / "model" / "templates.json"
+    if not templates_path.exists():
+        return {}
+    with open(templates_path, "r") as f:
+        payload = json.load(f)
+    return {name: np.array(values, dtype=float) for name, values in payload.get("templates", {}).items()}
+
+
+def _resolve_template(name: str, templates: Optional[Dict[str, np.ndarray]]) -> np.ndarray:
+    if not templates or name not in templates:
+        raise ValueError(f"Template '{name}' not found in model/templates.json")
+    return templates[name]
+
+
+def _load_yields(
+    pack_path: Path,
+    spec: Dict[str, Any],
+    templates: Optional[Dict[str, np.ndarray]] = None
+) -> Optional[np.ndarray]:
     """Load yield arrays from a model spec."""
     if not spec:
         return None
     if "values" in spec:
         return np.array(spec["values"], dtype=float)
+    if "template" in spec:
+        return _resolve_template(spec["template"], templates)
     if "file" in spec:
         file_path = pack_path / "model" / spec["file"]
         if not file_path.exists():

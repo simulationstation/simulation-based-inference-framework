@@ -1,16 +1,16 @@
 # Roadmap
 
-## Near-term (0–1 month)
-- Ship a validated toy analysis pack and demo pipeline.
-- Enforce lint/tests/demo in CI.
-- Add schema validations for model/yield definitions and systematics targets.
+## Phase 1: Template-likelihood packs (now)
+- Ship executable template packs with deterministic validation harnesses.
+- Enforce lint/tests/demo runs in CI.
+- Support basic profile-likelihood scans and reporting.
+- Add combination support later (correlations explicitly modeled).
 
-## Mid-term (1–3 months)
-- Expand the runtime to parse parametric model formulas used in packs.
-- Implement a true coverage test harness (pseudo-data generation + refits).
-- Add a data catalog and download scripts with hashes for any real public data.
+## Phase 2: Surrogate distillation + calibration
+- Train surrogate likelihoods with explicit error models.
+- Require calibration/coverage checks before any surrogate claims.
+- Add surrogate trust-region metadata in packs.
 
-## Longer-term (3–6 months)
-- Add support for pack combinations with correlation models.
-- Provide a calibrated surrogate likelihood baseline (with explicit trust regions).
-- Introduce a minimal SBI example only if a credible forward model exists.
+## Phase 3: SBI demonstrator (only with credible public models)
+- Provide a minimal SBI pack only where a public forward model is available.
+- Include calibration/coverage tests for the SBI pipeline.

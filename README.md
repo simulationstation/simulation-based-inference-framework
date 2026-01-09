@@ -2,13 +2,29 @@
 
 **Reusable Collider Analyses via Surrogate Likelihoods and Simulation-Based Inference at Scale**
 
+## Honesty Header
+
+**Implemented now**
+- Executable Poisson and Gaussian likelihoods with numeric templates and Gaussian-constrained nuisances.
+- A deterministic vertical-slice demo that writes `REPORT.md`, `results.json`, and `scan.csv`.
+- Schema validation for required files and supported template/nuisance targets.
+
+**Planned**
+- Template-likelihood combinations with correlations.
+- Surrogate distillation with calibration/coverage tests.
+- SBI demonstrators only where a credible forward model is public.
+
+**Not validated (yet)**
+- Surrogate/SBI accuracy or coverage guarantees.
+- Fit health thresholds as publication-grade diagnostics.
+
 ## Overview
 
 APS provides a standard, machine-executable representation of collider physics analysis likelihoods with:
 - Clear provenance and metadata
 - Explicit nuisance parameter definitions and correlations
 - Versioned validation tests reproducing published results
-- Optional surrogate models with quantified approximation error
+- Optional surrogate scaffolding (calibration work is pending)
 
 ## Installation
 
@@ -21,13 +37,16 @@ pip install -e ".[full,dev]"
 
 ## Quick Start
 
+> Note: `packs/cms_x6900_dijpsi` contains formula strings that the runtime does not parse yet.
+> Use `packs/toy_poisson_template_v1` for an executable example.
+
 ### Loading an Analysis Pack
 
 ```python
 import aps
 
 # Load a pack
-pack = aps.load("packs/cms_x6900_dijpsi")
+pack = aps.load("packs/toy_poisson_template_v1")
 
 # Get model information
 print(f"Name: {pack.name}")
@@ -63,13 +82,16 @@ print(f"68% CI: [{lower:.4f}, {upper:.4f}]")
 
 ```bash
 # Validate a pack
-aps validate packs/cms_x6900_dijpsi
+aps validate packs/toy_poisson_template_v1
 
 # Fit a model
-aps fit packs/cms_x6900_dijpsi --poi mu_signal --starts 100
+aps fit packs/toy_poisson_template_v1 --poi mu --starts 100
 
 # Compute limit
-aps limit packs/cms_x6900_dijpsi --poi mu_signal --cl 0.95
+aps limit packs/toy_poisson_template_v1 --poi mu --cl 0.95
+
+# Run vertical-slice demo
+aps demo --pack packs/toy_poisson_template_v1 --out out/toy_demo_v1 --seed 123
 
 # Combine analyses
 aps combine packs/pack1 packs/pack2 --correlations corr.yaml
@@ -91,6 +113,8 @@ my_analysis_pack/
     likelihood.json   # Likelihood specification
     schema.json       # Parameter ordering
     constraints.json  # Nuisance correlations (optional)
+    templates.json    # Numeric templates (optional)
+    nuisances.json    # Nuisance mapping (optional)
   validation/
     reproduce.py      # Reproduction script
     expected_results.json
@@ -111,7 +135,8 @@ my_analysis_pack/
 
 ## Surrogate Models
 
-Build fast emulators for expensive likelihoods:
+Surrogate builders are included, but calibration/coverage validation is not yet end-to-end.
+Use with caution until validation hooks are implemented.
 
 ```python
 from surrogates import SurrogateBuilder
@@ -130,7 +155,7 @@ print(f"68% coverage: {surrogate.validation.coverage_68:.2f}")
 
 ## Fit Health Diagnostics
 
-All fits include health checks:
+All fits include heuristic health checks:
 
 ```python
 health = model.assess_fit_health(theta, nu)
@@ -139,10 +164,7 @@ print(f"Status: {health.status}")  # HEALTHY, UNDERCONSTRAINED, MODEL_MISMATCH
 print(f"chi2/dof: {health.chi2_per_dof:.2f}")
 ```
 
-Thresholds:
-- chi2/dof < 0.5: UNDERCONSTRAINED
-- chi2/dof in [0.5, 3.0]: HEALTHY
-- chi2/dof > 3.0: MODEL_MISMATCH
+Thresholds are heuristics, not validated guarantees.
 
 ## Testing
 

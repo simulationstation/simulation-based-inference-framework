@@ -11,13 +11,14 @@ Implements:
 Patterns adapted from publication-grade rank-1 bottleneck tests.
 """
 
+import warnings
+from dataclasses import dataclass, field
+from multiprocessing import cpu_count
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 from scipy.optimize import minimize, minimize_scalar
-from scipy.stats import chi2 as chi2_dist, norm
-from typing import Dict, Any, List, Optional, Tuple, Callable
-from dataclasses import dataclass, field
-from multiprocessing import Pool, cpu_count
-import warnings
+from scipy.stats import chi2 as chi2_dist
 
 from .likelihoods import LikelihoodModel, FitHealth
 
@@ -651,7 +652,7 @@ def bootstrap_pvalue(
     for i in range(n_bootstrap):
         # Generate pseudo-data under null
         pred = model.predict(theta_null, np.zeros(model.n_nuisances))
-        pseudo_data = np.random.poisson(pred.expected)
+        _ = np.random.poisson(pred.expected)
 
         # In practice, we'd refit the model with pseudo_data
         # For now, approximate Lambda from chi2 distribution
@@ -686,7 +687,7 @@ def coverage_test(
     Returns:
         Dictionary with coverage results
     """
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
 
     coverages = []
     interval_widths = []
@@ -694,10 +695,30 @@ def coverage_test(
     for i in range(n_toys):
         # Generate toy data
         pred = model.predict(true_theta, np.zeros(model.n_nuisances))
-        # Would generate pseudo-data and refit
+        pseudo_data = rng.poisson(pred.expected)
+
+        try:
+            from .likelihoods import PoissonLikelihood
+        except ImportError:
+            from runtime.likelihoods import PoissonLikelihood
+
+        if isinstance(model, PoissonLikelihood):
+            toy_model = PoissonLikelihood(
+                observed=pseudo_data,
+                model_func=model.model_func,
+                pack=model.pack,
+                nuisance_sigmas=model.nuisance_sigmas,
+                nuisance_types=model.nuisance_types
+            )
+            toy_model._poi_names = model.poi_names
+            toy_model._nuisance_names = model.nuisance_names
+            toy_model._poi_bounds = model.get_bounds()[0]
+            toy_model._nuisance_bounds = model.get_bounds()[1]
+        else:
+            raise ValueError("Coverage test currently supports PoissonLikelihood models only.")
 
         # Compute interval
-        lower, upper = confidence_interval(model, poi_index=0, cl=cl, n_starts=20)
+        lower, upper = confidence_interval(toy_model, poi_index=0, cl=cl, n_starts=20)
 
         # Check if true value is covered
         covered = lower <= true_theta[0] <= upper

@@ -1,0 +1,53 @@
+{
+  "type": "poisson",
+  "nuisances_file": "nuisances.json",
+  "channels": [
+    {
+      "name": "toy_channel",
+      "type": "poisson",
+      "data": {
+        "file": "observations.csv",
+        "format": "csv",
+        "bins": 6,
+        "observable": "bin"
+      },
+      "model": {
+        "type": "template",
+        "signal": {
+          "template": "signal"
+        },
+        "background": {
+          "template": "background_nominal"
+        }
+      },
+      "systematics": [
+        {
+          "name": "lumi",
+          "type": "norm",
+          "constraint": "normal",
+          "sigma": 0.05,
+          "target": "both"
+        },
+        {
+          "name": "bkg_norm",
+          "type": "norm",
+          "constraint": "normal",
+          "sigma": 0.1,
+          "target": "background"
+        },
+        {
+          "name": "bkg_shape",
+          "type": "shape",
+          "constraint": "normal",
+          "sigma": 1.0,
+          "target": "background",
+          "up": "background_up",
+          "down": "background_down"
+        }
+      ]
+    }
+  ],
+  "correlations": {
+    "type": "independent"
+  }
+}
