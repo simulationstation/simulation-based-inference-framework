@@ -1,0 +1,23 @@
+{
+  "nuisances": [
+    {
+      "name": "lumi",
+      "type": "normal",
+      "target": "both",
+      "sigma": 0.05
+    },
+    {
+      "name": "bkg_norm",
+      "type": "normal",
+      "target": "background",
+      "sigma": 0.1
+    },
+    {
+      "name": "bkg_shape",
+      "type": "shape",
+      "target": "background",
+      "up": "background_up",
+      "down": "background_down"
+    }
+  ]
+}

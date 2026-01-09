@@ -15,6 +15,7 @@ Usage:
     aps limit <pack> --poi mu --method asymptotic
     aps combine <packA> <packB> --correlations correlations.yaml
     aps export <pack> --format parquet/json
+    aps demo --pack packs/toy_poisson_template_v1 --out out/toy_demo_v1 --seed 123
 """
 
 import argparse
@@ -395,6 +396,29 @@ def cmd_surrogate(args):
     return 0
 
 
+def cmd_demo(args):
+    """Run vertical-slice demo for a pack."""
+    from aps.demo import run_demo
+
+    try:
+        results = run_demo(
+            pack_path=args.pack,
+            out_dir=args.out,
+            seed=args.seed,
+            scan_min=args.scan_min,
+            scan_max=args.scan_max,
+            scan_steps=args.scan_steps,
+            n_starts=args.starts
+        )
+    except Exception as exc:
+        print(f"ERROR: {exc}")
+        return 1
+
+    print(f"Demo completed for {results['pack']['name']}")
+    print(f"Results written to: {args.out}")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Analysis Pack Standard CLI",
@@ -464,6 +488,16 @@ Examples:
                                   help='Sampling method')
     surrogate_parser.add_argument('-o', '--output', help='Output path for surrogate')
 
+    # Demo command
+    demo_parser = subparsers.add_parser('demo', help='Run vertical-slice demo')
+    demo_parser.add_argument('--pack', required=True, help='Path to analysis pack')
+    demo_parser.add_argument('--out', required=True, help='Output directory for artifacts')
+    demo_parser.add_argument('--seed', type=int, default=123, help='Random seed')
+    demo_parser.add_argument('--scan-min', type=float, default=0.0, help='Scan minimum for mu')
+    demo_parser.add_argument('--scan-max', type=float, default=2.0, help='Scan maximum for mu')
+    demo_parser.add_argument('--scan-steps', type=int, default=21, help='Number of scan points')
+    demo_parser.add_argument('--starts', type=int, default=50, help='Number of optimizer starts')
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -486,6 +520,8 @@ Examples:
         return cmd_export(args)
     elif args.command == 'surrogate':
         return cmd_surrogate(args)
+    elif args.command == 'demo':
+        return cmd_demo(args)
 
     return 0
 

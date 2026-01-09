@@ -5,8 +5,7 @@ These schemas define the required structure for metadata, likelihood specificati
 and constraint models.
 """
 
-import json
-from typing import Dict, Any
+from typing import Any, Dict
 
 # Metadata schema for metadata.yaml
 METADATA_SCHEMA: Dict[str, Any] = {
@@ -173,24 +172,28 @@ LIKELIHOOD_SCHEMA: Dict[str, Any] = {
                                 "type": "object",
                                 "properties": {
                                     "file": {"type": "string"},
+                                    "template": {"type": "string"},
                                     "values": {
                                         "type": "array",
                                         "items": {"type": "number"}
                                     },
                                     "parametric": {"type": "boolean"},
-                                    "formula": {"type": "string"}
+                                    "formula": {"type": "string"},
+                                    "parameters": {"type": "object"}
                                 }
                             },
                             "background": {
                                 "type": "object",
                                 "properties": {
                                     "file": {"type": "string"},
+                                    "template": {"type": "string"},
                                     "values": {
                                         "type": "array",
                                         "items": {"type": "number"}
                                     },
                                     "parametric": {"type": "boolean"},
-                                    "formula": {"type": "string"}
+                                    "formula": {"type": "string"},
+                                    "parameters": {"type": "object"}
                                 }
                             },
                             "efficiency": {
@@ -220,6 +223,10 @@ LIKELIHOOD_SCHEMA: Dict[str, Any] = {
                     }
                 }
             }
+        },
+        "nuisances_file": {
+            "type": "string",
+            "description": "Optional nuisance specification file in model/."
         },
         "correlations": {
             "type": "object",

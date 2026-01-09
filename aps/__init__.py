@@ -6,7 +6,7 @@ models of collider measurements and searches.
 """
 
 from .loaders import load, validate_pack
-from .schemas import METADATA_SCHEMA, LIKELIHOOD_SCHEMA, CONSTRAINTS_SCHEMA
+from .schemas import CONSTRAINTS_SCHEMA, LIKELIHOOD_SCHEMA, METADATA_SCHEMA
 
 __version__ = "0.1.0"
 __all__ = ["load", "validate_pack", "METADATA_SCHEMA", "LIKELIHOOD_SCHEMA", "CONSTRAINTS_SCHEMA"]
