@@ -1,0 +1,56 @@
+{
+  "type": "poisson",
+  "channels": [
+    {
+      "name": "dijpsi",
+      "data": {
+        "file": "dijpsi_bins.csv",
+        "format": "csv",
+        "bins": 24,
+        "observable": "m_dijpsi_GeV"
+      },
+      "model": {
+        "signal": {
+          "parametric": true,
+          "formula": "breit_wigner_interference",
+          "parameters": {
+            "M1": {"value": 6.927, "unit": "GeV", "description": "X(6900) mass"},
+            "G1": {"value": 0.122, "unit": "GeV", "description": "X(6900) width"},
+            "M2": {"value": 7.1, "unit": "GeV", "description": "X(7100) mass"},
+            "G2": {"value": 0.1, "unit": "GeV", "description": "X(7100) width"}
+          }
+        },
+        "background": {
+          "parametric": true,
+          "formula": "exponential_plus_polynomial",
+          "parameters": {
+            "exp_slope": {"value": -0.5, "nuisance": "bkg_shape"},
+            "poly_order": 1
+          }
+        },
+        "efficiency": {
+          "value": 0.85,
+          "uncertainty": 0.05,
+          "nuisance": "efficiency"
+        }
+      },
+      "systematics": [
+        {
+          "name": "lumi",
+          "type": "norm",
+          "constraint": "lognormal",
+          "sigma": 0.025
+        },
+        {
+          "name": "bkg_norm",
+          "type": "norm",
+          "constraint": "normal",
+          "sigma": 0.1
+        }
+      ]
+    }
+  ],
+  "correlations": {
+    "type": "independent"
+  }
+}

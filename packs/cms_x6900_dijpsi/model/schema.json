@@ -1,0 +1,19 @@
+{
+  "pois": [
+    {"name": "mu_signal", "index": 0, "transform": "none"},
+    {"name": "r_coupling", "index": 1, "transform": "log"},
+    {"name": "phi_coupling", "index": 2, "transform": "none"}
+  ],
+  "nuisances": [
+    {"name": "lumi", "index": 0, "transform": "none"},
+    {"name": "bkg_norm", "index": 1, "transform": "none"},
+    {"name": "bkg_shape", "index": 2, "transform": "none"}
+  ],
+  "derived": [
+    {
+      "name": "R_complex",
+      "formula": "r_coupling * exp(1j * phi_coupling)",
+      "depends_on": ["r_coupling", "phi_coupling"]
+    }
+  ]
+}

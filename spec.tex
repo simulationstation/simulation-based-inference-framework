@@ -1,0 +1,554 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  citecolor=blue
+}
+
+\newcommand{\Lcal}{\mathcal{L}}
+\newcommand{\thetavec}{\boldsymbol{\theta}}
+\newcommand{\nuvec}{\boldsymbol{\nu}}
+\newcommand{\xobs}{x_{\mathrm{obs}}}
+\newcommand{\xsim}{x_{\mathrm{sim}}}
+
+\title{\textbf{Project Specification: Reusable Collider Analyses via Surrogate Likelihoods and\\ Simulation-Based Inference at Scale}}
+\author{(Draft technical specification)}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document specifies an end-to-end, reproducible system for packaging, validating, and distributing \emph{reusable statistical models} of collider measurements and searches. The core deliverable is an \emph{Analysis Pack} format containing an executable likelihood (exact or approximate), metadata, provenance, and validation tests. Where full likelihoods are too large or unavailable, the system supports \emph{surrogate likelihoods} (emulators) and \emph{simulation-based inference} (SBI) models, with explicit uncertainty calibration and coverage testing.
+The system targets public data products (e.g.\ published binned measurements, simplified likelihoods, released full statistical models) and is designed to enable reinterpretation, combination, and global fits by external users without access to internal collaboration infrastructure.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Executive Summary}
+
+\subsection{Problem}
+Collider results are often published as plots, binned tables, or partial statistical information. This prevents reliable reuse for:
+\begin{itemize}[nosep]
+  \item reinterpretation under new physics models,
+  \item statistically correct combinations across analyses,
+  \item global fits (EFT, simplified models, etc.),
+  \item principled anomaly checks across many channels.
+\end{itemize}
+
+\subsection{Vision}
+Create a \textbf{standard, machine-executable representation} of an analysis likelihood with:
+\begin{itemize}[nosep]
+  \item clear provenance,
+  \item explicit nuisance parameter definitions and correlations,
+  \item versioned validation tests reproducing published results,
+  \item optional surrogate models with quantified approximation error.
+\end{itemize}
+
+\subsection{Core Deliverables}
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Analysis Pack Standard (APS)}: file structure, schemas, and metadata.
+  \item \textbf{Reusable Likelihood Runtime}: Python API + CLI to load and evaluate packs.
+  \item \textbf{Surrogate Builder}: trains and calibrates emulators for expensive or unavailable likelihoods.
+  \item \textbf{Validation \& Coverage Suite}: reproducibility, regression tests, and statistical calibration.
+  \item \textbf{Public Analysis Library}: curated packs for a representative set of public measurements.
+\end{enumerate}
+
+% ============================================================
+\section{Scope and Assumptions}
+
+\subsection{In Scope}
+\begin{itemize}[leftmargin=*]
+  \item Publicly available analysis products: binned yields/cross sections, covariance/correlation (if provided), simplified likelihoods, and released full statistical models.
+  \item Likelihood classes:
+    \begin{itemize}[nosep]
+      \item Poisson count likelihoods with nuisance constraints (template/histogram analyses).
+      \item Gaussian likelihoods for unfolded measurements with covariance (where appropriate).
+      \item Hybrid forms (e.g.\ Poisson for counts with Gaussian constraints on systematics).
+    \end{itemize}
+  \item Surrogate likelihoods:
+    \begin{itemize}[nosep]
+      \item function emulators of $\log \Lcal(\xobs\mid \thetavec,\nuvec)$,
+      \item likelihood-ratio surrogates (when only ratios are needed),
+      \item posterior surrogates $p(\thetavec,\nuvec\mid\xobs)$ if justified.
+    \end{itemize}
+  \item SBI for event-level open data \emph{only when} sufficient public simulation and detector response are available to define a credible forward model.
+\end{itemize}
+
+\subsection{Out of Scope / Non-Goals}
+\begin{itemize}[leftmargin=*]
+  \item Replacing collaboration-internal full likelihoods or claiming official status.
+  \item Extracting hidden information not present in public releases.
+  \item ``Automatic discovery of new physics'' without statistical calibration and systematics control.
+  \item Building detector simulations from scratch beyond what is needed for public open-data SBI demonstrations.
+\end{itemize}
+
+\subsection{Design Constraints}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Transparency:} every pack must specify exactly what information is included and what is not.
+  \item \textbf{Reproducibility:} packs must be executable with pinned environments and deterministic tests.
+  \item \textbf{Honest Uncertainty:} surrogate approximation error must be measured and propagated.
+  \item \textbf{Statistical Validity:} provide coverage and calibration checks whenever claims are made.
+\end{itemize}
+
+% ============================================================
+\section{Definitions}
+
+\subsection{Likelihood and Nuisances}
+A general analysis likelihood is:
+\[
+\Lcal(\xobs\mid \thetavec,\nuvec) = p(\xobs \mid \thetavec,\nuvec)\, p(\nuvec),
+\]
+where:
+\begin{itemize}[nosep]
+  \item $\thetavec$ are parameters of interest (POIs): signal strengths, EFT Wilson coefficients, model parameters.
+  \item $\nuvec$ are nuisance parameters: backgrounds, efficiencies, scale factors, systematic shifts.
+  \item $p(\nuvec)$ are constraint terms (priors) encoding systematic uncertainties.
+\end{itemize}
+
+\subsection{Reusable Analysis}
+An analysis is \emph{reusable} if an external user can:
+\begin{itemize}[nosep]
+  \item evaluate $\log \Lcal$ for arbitrary $(\thetavec,\nuvec)$,
+  \item profile or marginalize nuisance parameters,
+  \item reproduce published limits/intervals within declared tolerances,
+  \item combine likelihoods across analyses with correctly handled correlations (if provided).
+\end{itemize}
+
+\subsection{Surrogate Likelihood}
+A surrogate likelihood is an approximation:
+\[
+\widehat{\log \Lcal}(\thetavec,\nuvec) \approx \log \Lcal(\xobs\mid \thetavec,\nuvec)
+\]
+with a quantified error model $\epsilon(\thetavec,\nuvec)$ used for calibration.
+
+\subsection{Simulation-Based Inference (SBI)}
+SBI uses forward simulation to learn posteriors or likelihood ratios when an analytic likelihood is intractable:
+\[
+(\thetavec \to \xsim) \quad \text{and learn} \quad p(\thetavec\mid \xobs)\ \text{or}\ r(\xobs;\thetavec_0,\thetavec_1).
+\]
+
+% ============================================================
+\section{User Stories and Success Criteria}
+
+\subsection{Primary Users}
+\begin{itemize}[leftmargin=*]
+  \item Phenomenologists: reinterpret results for new models, perform global fits.
+  \item Experimentalists: publish portable likelihoods; verify external reproductions.
+  \item ML researchers: develop surrogates with strong calibration/coverage requirements.
+  \item Educators/students: run faithful inference pipelines on public results.
+\end{itemize}
+
+\subsection{Success Criteria}
+A release is considered successful if:
+\begin{enumerate}[leftmargin=*]
+  \item For each curated analysis pack, a reference notebook reproduces the main published numerical results (limits, best-fits, intervals) within declared tolerance.
+  \item The runtime API enables combining multiple packs and producing a joint likelihood with user-specified correlations.
+  \item Surrogate packs meet accuracy thresholds (Sec.~\ref{sec:surrogate_validation}) and include uncertainty inflation when needed.
+  \item CI/CD prevents regressions: tests fail if reproduction drifts beyond tolerance.
+  \item Packs are versioned, citable, and include licensing/provenance metadata.
+\end{enumerate}
+
+% ============================================================
+\section{System Overview}
+
+\subsection{High-Level Architecture}
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Ingestion Layer:} imports public data and (when available) executable likelihood formats.
+  \item \textbf{Canonical Model Layer:} represents likelihoods in a standard intermediate representation (IR).
+  \item \textbf{Inference Runtime:} evaluates, profiles, samples, and combines models.
+  \item \textbf{Surrogate Builder (optional):} trains emulators for speed or missing components.
+  \item \textbf{Validation Suite:} reproduces published results, performs calibration/coverage tests.
+  \item \textbf{Registry \& Distribution:} searchable index and artifact hosting for packs and surrogates.
+\end{enumerate}
+
+\subsection{Threat Model (Scientific Integrity)}
+The system must prevent:
+\begin{itemize}[leftmargin=*]
+  \item silent drift in likelihood definitions,
+  \item untracked changes to systematics or correlations,
+  \item overconfident surrogate approximations,
+  \item invalid statistical claims (miscalibrated p-values, broken coverage).
+\end{itemize}
+
+% ============================================================
+\section{Analysis Pack Standard (APS)}
+
+\subsection{Pack Contents}
+Each Analysis Pack is a directory (or OCI image / zip) with:
+
+\begin{longtable}{@{}p{0.28\textwidth}p{0.68\textwidth}@{}}
+\toprule
+\textbf{Path} & \textbf{Purpose} \\
+\midrule
+\texttt{metadata.yaml} &
+Name, short description, collaboration/source, DOI(s), license, contact, version, references, hash of inputs. \\
+\texttt{data/} &
+Observed data products: binned counts, unfolded measurements, covariance matrices, binning definitions. \\
+\texttt{model/likelihood.json} &
+Executable likelihood specification (exact or approximate), including nuisance definitions. \\
+\texttt{model/constraints.json} &
+Optional: explicit nuisance constraint model and correlation structure. \\
+\texttt{model/schema.json} &
+Machine-readable schema and parameter ordering conventions. \\
+\texttt{validation/} &
+Reference outputs, reproduction scripts, unit tests, tolerances, expected plots. \\
+\texttt{surrogate/} &
+Optional: trained surrogate weights, calibration curves, error model. \\
+\texttt{env/} &
+Pinned environment (conda-lock/uv/pip-compile), container recipe, hardware notes. \\
+\texttt{LICENSE} &
+License for the pack content (data/model/weights), plus attribution requirements. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Metadata Requirements}
+\texttt{metadata.yaml} MUST include:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Provenance:} URLs/DOIs of the originating public records; hashes of downloaded artifacts.
+  \item \textbf{Interpretation limits:} what was approximated or not included (e.g.\ missing correlations).
+  \item \textbf{Parameter contract:} names, units, valid ranges, priors (if Bayesian), and transformations.
+  \item \textbf{Statistical contract:} likelihood type, treatment of systematics, asymptotic vs toys.
+  \item \textbf{Reproduction targets:} which published tables/figures/numbers are reproduced and how.
+\end{itemize}
+
+\subsection{Canonical Parameter Model}
+All packs MUST define:
+\begin{itemize}[leftmargin=*]
+  \item ordered POIs $\thetavec$,
+  \item ordered nuisances $\nuvec$,
+  \item optional derived parameters and deterministic constraints,
+  \item correlation model across nuisances (block-diagonal, full, or unknown).
+\end{itemize}
+
+\subsection{Correlation Representation}
+The APS shall support:
+\begin{itemize}[leftmargin=*]
+  \item Independent nuisances (default).
+  \item Fully correlated groups (common normalization shifts).
+  \item General correlations via covariance matrix in nuisance space.
+  \item ``Unknown correlation'' explicitly marked, requiring conservative combination rules.
+\end{itemize}
+
+% ============================================================
+\section{Likelihood Runtime and API}
+
+\subsection{Core Capabilities}
+The runtime MUST provide:
+\begin{itemize}[leftmargin=*]
+  \item Evaluate $\log\Lcal(\xobs\mid\thetavec,\nuvec)$ and gradients if available.
+  \item Profile likelihood: $\hat{\nu}(\thetavec)=\arg\max_{\nuvec}\Lcal$.
+  \item Asymptotic test statistics (profile likelihood ratio) and CLs/intervals where valid.
+  \item Bayesian sampling for packs that provide priors (optional, explicitly labeled).
+  \item Combine packs: joint likelihood $\log\Lcal_{\mathrm{joint}}=\sum_i \log\Lcal_i$ with correlation mapping.
+\end{itemize}
+
+\subsection{API Sketch (Python)}
+\begin{verbatim}
+pack = aps.load("packs/atlas_xyz_v1")
+model = pack.model()
+
+# evaluate log-likelihood
+ll = model.logpdf(theta, nu)
+
+# profile nuisances
+nu_hat = model.profile_nuisance(theta)
+
+# compute interval / limit
+result = inference.upper_limit(model, poi="mu", method="asymptotic_cls")
+\end{verbatim}
+
+\subsection{CLI Requirements}
+Provide:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{aps validate <pack>}
+  \item \texttt{aps fit <pack> --poi mu}
+  \item \texttt{aps limit <pack> --poi mu --method asymptotic}
+  \item \texttt{aps combine <packA> <packB> --correlations correlations.yaml}
+  \item \texttt{aps export <pack> --format parquet/json}
+\end{itemize}
+
+% ============================================================
+\section{Surrogate Likelihoods}
+
+\subsection{When Surrogates Are Needed}
+Surrogates are allowed if:
+\begin{itemize}[leftmargin=*]
+  \item the exact model is too large/slow for broad reinterpretation,
+  \item only partial public information exists (requiring approximation),
+  \item an SBI-derived likelihood ratio is the only feasible representation.
+\end{itemize}
+
+Surrogates are \textbf{not} a license to omit missing correlations or systematics without disclosure.
+
+\subsection{Surrogate Model Families}
+The system SHALL support multiple backends:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Parametric surrogates:} low-order expansions, spline models for low-dimensional POIs.
+  \item \textbf{Gaussian Process:} small-dimensional emulation with calibrated uncertainty.
+  \item \textbf{Neural emulators:} MLP/Transformer over $(\thetavec,\nuvec)$ for high-dimensional nuisance spaces.
+  \item \textbf{Ratio surrogates:} direct estimation of $\log \Lcal(\theta)-\log \Lcal(\theta_{\rm ref})$.
+\end{itemize}
+
+\subsection{Training Data Generation}
+Two modes:
+
+\paragraph{Exact-model distillation.}
+If an executable likelihood exists (e.g.\ a template fit model),
+generate a design over $(\thetavec,\nuvec)$:
+\begin{itemize}[leftmargin=*]
+  \item Latin hypercube or Sobol sequences for global coverage.
+  \item Active learning around the MLE and along confidence boundaries.
+  \item Stress points at nuisance extremes and low-count regimes.
+\end{itemize}
+Store $(\thetavec,\nuvec,\log\Lcal, \nabla\log\Lcal)$ when available.
+
+\paragraph{Simulation-based training.}
+If only a simulator exists, generate $(\theta, x)$ pairs and train a likelihood-ratio/posterior estimator,
+with explicit control of simulator seeds and versioning.
+
+\subsection{Calibration and Error Propagation}
+Every surrogate pack MUST include:
+\begin{itemize}[leftmargin=*]
+  \item A held-out validation set and error diagnostics.
+  \item An \textbf{error model} $\epsilon(\thetavec,\nuvec)$:
+    \begin{itemize}[nosep]
+      \item either predictive uncertainty (GP / ensembles),
+      \item or empirical error bands from residuals,
+      \item and a rule to \emph{inflate} intervals when error exceeds thresholds.
+    \end{itemize}
+  \item A mechanism to treat surrogate error as an additional nuisance (conservative option).
+\end{itemize}
+
+\subsection{Surrogate Validation Requirements}
+\label{sec:surrogate_validation}
+A surrogate is publishable in the registry only if it passes:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Pointwise accuracy:} $\max |\Delta \log\Lcal|$ below threshold on validation set.
+  \item \textbf{MLE stability:} surrogate MLE within tolerance of exact-model MLE.
+  \item \textbf{Interval stability:} 68\%/95\% intervals shift less than tolerance \emph{or} are inflated accordingly.
+  \item \textbf{Coverage checks:} pseudo-experiments (where possible) demonstrate correct coverage after calibration.
+  \item \textbf{Pathology checks:} no spurious extra minima; stable gradients; bounded extrapolation behavior.
+\end{enumerate}
+
+% ============================================================
+\section{Simulation-Based Inference Track (Optional, Public Open Data)}
+
+\subsection{Prerequisites}
+SBI is only credible when the following are available publicly:
+\begin{itemize}[leftmargin=*]
+  \item a forward simulator chain at the required fidelity (generator $\to$ detector response),
+  \item adequate public documentation of selections and observables,
+  \item enough event-level data (or derived objects) to define $\xobs$ robustly,
+  \item a consistent treatment of detector and theory systematics.
+\end{itemize}
+
+\subsection{SBI Outputs}
+The SBI subsystem may produce:
+\begin{itemize}[leftmargin=*]
+  \item posterior $p(\thetavec\mid\xobs)$ for a fixed nuisance treatment, or
+  \item a likelihood-ratio estimator $r(\xobs;\theta_0,\theta_1)$ for hypothesis tests, or
+  \item a compressed summary statistic $s(\xobs)$ that is information-rich and validated.
+\end{itemize}
+
+\subsection{SBI Validation}
+SBI models MUST undergo:
+\begin{itemize}[leftmargin=*]
+  \item simulation-to-simulation closure tests,
+  \item robustness to domain shift (sim$\to$data) with explicit diagnostics,
+  \item coverage tests using simulator truth,
+  \item ablation studies on systematics modeling choices.
+\end{itemize}
+
+% ============================================================
+\section{Validation, Reproducibility, and Statistical Guarantees}
+
+\subsection{Reproduction Tests}
+For each pack:
+\begin{itemize}[leftmargin=*]
+  \item Reproduce the central published result (limit/best-fit) within tolerance.
+  \item Reproduce at least one auxiliary diagnostic (pulls, impacts, Asimov curves).
+  \item Record all random seeds and environment hashes.
+\end{itemize}
+
+\subsection{Coverage and Calibration}
+Where pseudo-experiments are valid:
+\begin{itemize}[leftmargin=*]
+  \item verify frequentist coverage of confidence intervals,
+  \item verify calibration of p-values under the null,
+  \item document breakdown conditions (non-asymptotic, boundary issues, low counts).
+\end{itemize}
+
+\subsection{Uncertainty Accounting Policy}
+The system must label each pack with:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Included uncertainties:} stat, syst components, correlations.
+  \item \textbf{Omitted uncertainties:} missing covariance, theory systematics, unfolding bias.
+  \item \textbf{Assumptions:} Gaussianity, linearization, asymptotic approximations.
+\end{itemize}
+
+% ============================================================
+\section{Software Engineering Requirements}
+
+\subsection{Repository Structure (Reference)}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{aps/}: core library (schemas, loaders, validators)
+  \item \texttt{runtime/}: inference backends (optimizers, samplers)
+  \item \texttt{surrogates/}: training + calibration tooling
+  \item \texttt{packs/}: curated analysis packs (as submodules or separate registry)
+  \item \texttt{docs/}: spec + tutorials + developer guides
+  \item \texttt{tests/}: unit + integration + statistical regression tests
+\end{itemize}
+
+\subsection{Testing}
+\begin{itemize}[leftmargin=*]
+  \item Unit tests for schema validation, numerical stability, correlation mapping.
+  \item Integration tests: end-to-end reproduction on a small curated subset.
+  \item Statistical regression tests: ensure limits/intervals do not drift.
+  \item Deterministic tests: pinned seeds, pinned environments.
+\end{itemize}
+
+\subsection{Numerical Stability and Conditioning}
+Requirements:
+\begin{itemize}[leftmargin=*]
+  \item explicit handling of zero/low counts,
+  \item stable log-sum-exp for mixture terms,
+  \item bounded parameter transforms for constrained nuisances,
+  \item diagnostics for ill-conditioned covariance matrices (regularization with disclosure).
+\end{itemize}
+
+\subsection{Performance Targets}
+Targets depend on pack size, but the runtime should support:
+\begin{itemize}[leftmargin=*]
+  \item single-evaluation latency suitable for scanning (vectorized where possible),
+  \item batch evaluation on CPU; optional GPU backend for large scans,
+  \item caching of expensive intermediate computations.
+\end{itemize}
+
+% ============================================================
+\section{Registry, Distribution, and Governance}
+
+\subsection{Registry}
+A public index of packs with:
+\begin{itemize}[leftmargin=*]
+  \item searchable metadata (process, dataset, energy, final state),
+  \item versioning and deprecation policy,
+  \item cryptographic integrity checks (hashes),
+  \item DOI support for citation and persistence.
+\end{itemize}
+
+\subsection{Licensing and Attribution}
+Each pack must specify:
+\begin{itemize}[leftmargin=*]
+  \item license for the pack content,
+  \item required citations (paper DOI, dataset DOI, software),
+  \item disclaimers regarding endorsement by collaborations.
+\end{itemize}
+
+\subsection{Review and Acceptance Process}
+Before adding a pack to the ``trusted'' registry tier:
+\begin{itemize}[leftmargin=*]
+  \item automated validation passes,
+  \item human review of provenance and assumptions,
+  \item reproduction by an independent reviewer environment,
+  \item documentation completeness check.
+\end{itemize}
+
+% ============================================================
+\section{Risk Register (Selected)}
+
+\begin{longtable}{@{}p{0.25\textwidth}p{0.35\textwidth}p{0.35\textwidth}@{}}
+\toprule
+\textbf{Risk} & \textbf{Failure Mode} & \textbf{Mitigation} \\
+\midrule
+Missing correlations & Overconfident combinations & Require explicit ``unknown correlation'' tags; conservative combination rules; sensitivity scans. \\
+Surrogate overfitting & Spurious minima, wrong intervals & Hold-out tests; ensembles/GP; interval inflation; coverage tests. \\
+Domain shift (SBI) & Simulator not matching data & Dedicated diagnostics; restrict to closure claims; publish ``trust regions''. \\
+Statistical misuse & Miscalibrated p-values & Built-in calibration tools; clear labeling of asymptotic assumptions; recommend toy MC when needed. \\
+Provenance drift & Packs silently change & Hash all inputs; signed releases; CI checks; immutable registry releases. \\
+\bottomrule
+\end{longtable}
+
+% ============================================================
+\section{Implementation Plan (Milestones Without Time Estimates)}
+
+\subsection{Phase 0: Standard and Minimal Runtime}
+\begin{itemize}[leftmargin=*]
+  \item Define APS schemas and reference pack examples.
+  \item Implement loaders/validators and a minimal inference runtime (profile likelihood + limit setting).
+  \item Curate 3--5 pilot packs with full reproduction tests.
+\end{itemize}
+
+\subsection{Phase 1: Correlations and Combination}
+\begin{itemize}[leftmargin=*]
+  \item Correlation mapping format and APIs.
+  \item Joint likelihood construction with conservative defaults.
+  \item Regression test suite for combinations.
+\end{itemize}
+
+\subsection{Phase 2: Surrogate Builder}
+\begin{itemize}[leftmargin=*]
+  \item Distillation pipeline (design points, active learning).
+  \item Calibration and uncertainty propagation.
+  \item ``Surrogate pack'' format and acceptance tests.
+\end{itemize}
+
+\subsection{Phase 3: SBI Demonstrators on Open Data}
+\begin{itemize}[leftmargin=*]
+  \item Select one public open-data analysis with feasible forward modeling.
+  \item Implement SBI training + closure tests and publish as experimental tier pack.
+\end{itemize}
+
+\subsection{Phase 4: Scaling and Community Adoption}
+\begin{itemize}[leftmargin=*]
+  \item Expand curated pack library (prioritize analyses with strong public artifacts).
+  \item Outreach to publish-ready formats; templates for analysis authors.
+  \item Establish ``trusted'' vs ``experimental'' tiers and governance.
+\end{itemize}
+
+% ============================================================
+\section{Appendix A: Minimal Example Pack Layout}
+
+\begin{verbatim}
+my_analysis_pack/
+  metadata.yaml
+  LICENSE
+  data/
+    observed_counts.csv
+    binning.json
+  model/
+    likelihood.json
+    schema.json
+  validation/
+    reproduce.py
+    expected_results.json
+    tolerances.yaml
+    tests/
+      test_reproduction.py
+  env/
+    requirements.txt
+    container/Dockerfile
+\end{verbatim}
+
+\section{Appendix B: Tolerance Policy (Example)}
+\begin{itemize}[leftmargin=*]
+  \item Best-fit POI: within 1--5\% relative (or absolute tolerance when near zero).
+  \item 95\% CL limit: within 5\% relative for stable asymptotic regimes.
+  \item Log-likelihood curve: max pointwise deviation $\Delta \log\Lcal < 0.1$ over declared scan domain.
+\end{itemize}
+
+\end{document}

@@ -1,0 +1,39 @@
+# Tolerance definitions for reproduction tests
+
+# Best-fit POI tolerance
+best_fit:
+  mu_signal:
+    relative: 0.10  # 10% relative tolerance
+    absolute: 0.1   # Or 0.1 absolute, whichever is larger
+  r_coupling:
+    relative: 0.20
+    absolute: 0.2
+  phi_coupling:
+    absolute: 0.5  # Phase in radians
+
+# Confidence interval tolerance
+intervals:
+  cl_68:
+    shift_relative: 0.10  # Interval can shift by up to 10%
+    width_relative: 0.20  # Width can vary by up to 20%
+  cl_95:
+    shift_relative: 0.15
+    width_relative: 0.25
+
+# Log-likelihood curve tolerance
+likelihood_curve:
+  max_pointwise_delta: 0.1  # Max |Delta log L|
+  scan_range: [-3, 3]  # In sigma units from MLE
+
+# Fit health requirements
+fit_health:
+  chi2_dof_min: 0.5
+  chi2_dof_max: 3.0
+  deviance_dof_max: 3.0
+
+# Surrogate requirements (if applicable)
+surrogate:
+  mae_max: 0.05
+  rmse_max: 0.1
+  coverage_68_min: 0.60
+  coverage_95_min: 0.90

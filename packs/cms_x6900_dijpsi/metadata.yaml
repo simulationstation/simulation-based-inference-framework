@@ -1,0 +1,79 @@
+name: cms_x6900_dijpsi
+version: "1.0.0"
+description: >
+  CMS di-J/psi invariant mass measurement for X(6900) and X(7100) exotic states.
+  Binned histogram data from CMS Run 2 full luminosity.
+
+collaboration: CMS
+contact: analysis_pack_authors@example.org
+license: CC-BY-4.0
+
+provenance:
+  sources:
+    - type: hepdata
+      id: "10.17182/hepdata.141028"
+      description: "CMS di-J/psi measurement HEPData record"
+    - type: arxiv
+      id: "2306.07164"
+      description: "CMS observation of new resonances in J/psi pairs"
+  interpretation_limits:
+    - "Systematic uncertainties simplified (stat-only in current version)"
+    - "Interference between X(6900) and X(7100) assumed constructive"
+    - "Background shape fixed from CMS analysis"
+
+parameters:
+  pois:
+    - name: mu_signal
+      description: "Overall signal strength modifier"
+      range: [0.0, 5.0]
+      nominal: 1.0
+      unit: ""
+    - name: r_coupling
+      description: "Coupling ratio magnitude |R| = |c2/c1|"
+      range: [0.01, 10.0]
+      nominal: 1.0
+      unit: ""
+    - name: phi_coupling
+      description: "Coupling ratio phase"
+      range: [-3.14159, 3.14159]
+      nominal: 0.0
+      unit: "rad"
+  nuisances:
+    - name: lumi
+      description: "Integrated luminosity uncertainty"
+      constraint: lognormal
+      nominal: 0.0
+      sigma: 0.025
+    - name: bkg_norm
+      description: "Background normalization"
+      constraint: normal
+      nominal: 0.0
+      sigma: 1.0
+    - name: bkg_shape
+      description: "Background shape parameter"
+      constraint: normal
+      nominal: 0.0
+      sigma: 1.0
+
+statistical_contract:
+  likelihood_type: poisson
+  systematics_treatment: "Profiled nuisance parameters with constraint terms"
+  asymptotic_valid: true
+  toy_mc_recommended: false
+
+reproduction_targets:
+  - name: "X(6900) mass"
+    source: "CMS-PAS-BPH-21-003"
+    value: 6927
+    tolerance_abs: 50
+    unit: "MeV"
+  - name: "X(6900) width"
+    source: "CMS-PAS-BPH-21-003"
+    value: 122
+    tolerance_abs: 30
+    unit: "MeV"
+
+references:
+  - "CMS Collaboration, arXiv:2306.07164"
+  - "LHCb Collaboration, Sci. Bull. 65 (2020) 1983"
+  - "ATLAS Collaboration, Phys. Rev. Lett. 131 (2023) 151902"

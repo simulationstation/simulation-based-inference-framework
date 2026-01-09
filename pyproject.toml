@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aps"
+version = "0.1.0"
+description = "Analysis Pack Standard: Reusable Collider Analyses via Surrogate Likelihoods and Simulation-Based Inference"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "APS Developers"}
+]
+keywords = [
+    "particle physics",
+    "statistics",
+    "likelihood",
+    "inference",
+    "surrogate models",
+    "collider physics"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+dependencies = [
+    "numpy>=1.20.0",
+    "scipy>=1.7.0",
+    "pyyaml>=5.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+full = [
+    "pandas>=1.3.0",
+    "pyarrow>=10.0.0",
+    "matplotlib>=3.4.0",
+    "jsonschema>=4.0.0",
+]
+docs = [
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+]
+
+[project.scripts]
+aps = "cli:main"
+
+[project.urls]
+Documentation = "https://github.com/analysis-pack-standard/aps"
+Repository = "https://github.com/analysis-pack-standard/aps"
+
+[tool.setuptools]
+packages = ["aps", "runtime", "surrogates"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]

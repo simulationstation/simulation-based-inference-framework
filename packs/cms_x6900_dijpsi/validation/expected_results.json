@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "date_generated": "2026-01-08",
+  "reference": "CMS-PAS-BPH-21-003",
+  "results": {
+    "mle_mu": {
+      "value": 1.0,
+      "tolerance_rel": 0.3,
+      "description": "Signal strength at MLE"
+    },
+    "mle_r": {
+      "value": 1.0,
+      "tolerance_rel": 0.5,
+      "description": "Coupling ratio magnitude at MLE"
+    },
+    "mu_68cl_lower": {
+      "value": 0.7,
+      "tolerance_rel": 0.3,
+      "description": "Lower bound of 68% CI on mu"
+    },
+    "mu_68cl_upper": {
+      "value": 1.5,
+      "tolerance_rel": 0.3,
+      "description": "Upper bound of 68% CI on mu"
+    },
+    "chi2_per_dof": {
+      "value": 1.5,
+      "tolerance_abs": 1.5,
+      "description": "Fit quality chi2/dof"
+    }
+  },
+  "notes": [
+    "Expected values are approximate based on CMS published results",
+    "Tolerances are set conservatively for this demonstration pack",
+    "Full validation requires comparison with official CMS results"
+  ]
+}
